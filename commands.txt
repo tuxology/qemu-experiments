@@ -1,0 +1,105 @@
+//////////////////////////////////////////////////////////////
+
+# Install Toolchain
+# I am using the GNU/Linux Toolchain (arm-linux-gcc 4.3.2)
+# Install QEMU (qemu-system-arm)
+
+//////////////////////////////////////////////////////////////
+
+#U-Boot compilation:
+
+wget -c ftp://ftp.denx.de/pub/u-boot/u-boot-2010.03.tar.bz2
+wget --no-check-certificate https://github.com/tuxdna/arm-experiments/raw/master/u-boot-2010.03-versatilepb.patch
+tar -xvf u-boot-2010.03.tar.bz2
+cd u-boot-2010.03
+patch -p0 < ../u-boot-2010.03-versatilepb.patch
+export CROSS_COMPILE=arm-linux-
+export ARCH=arm
+make versatilepb_config
+
+//////////////////////////////////////////////////////////////
+
+# Kernel compilation:
+#
+# Get Latest Kernel : linux-2.6.29 ( Thats what i've got ;-) )
+
+tar -xvf linux-2.6.29.tar.gz
+cd linux-2.6.29
+cd arch/arm/configs
+make ARCH=arm versatile_defconfig
+cd ../../../
+make ARCH=arm menuconfig
+make ARCH=arm CROSS_COMPILE=arm-linux- all
+
+# Testing Kernel (no filesystem, so gives error)
+
+qemu-system-arm -M versatilepb -m 128M -kernel path/to/zImage
+
+# Set Modules and Headers Dirs and install (Can be skipped in this context)
+
+mkdir -p `pwd`/modules_install_dir/
+mkdir -p `pwd`/headers_install_dir/
+make modules_install INSTALL_MOD_PATH=`pwd`/modules_install_dir/
+make headers_install INSTALL_HDR_PATH=`pwd`/headers_install_dir/
+
+///////////////////////////////////////////////////////////////
+
+# Making a dummy root filesystem for testing (refer 'kerneltest' dir):
+# Make a test.c
+
+arm-none-linux-gnueabi-gcc -static test.c -o test
+echo test | cpio -o --format=newc > test_rootfs
+
+qemu-system-arm -M versatilepb -m 128M -kernel path/to/zImage -initrd path/to/test_rootfs -append "root=/dev/ram rdinit=/test"
+
+//////////////////////////////////////////////////////////////
+
+# Prepare a minimal root filesystem:
+
+export ROOTFS_PATH=path/of/your/choice/for/rootfs
+
+# Use Busybox:
+
+wget http://www.busybox.net/downloads/busybox-1.16.0.tar.bz2
+tar jxf busybox-1.16.0.tar.bz2
+cd busybox-1.16.0
+make ARCH=arm CROSS_COMPILE=arm-linux- defconfig
+make ARCH=arm CROSS_COMPILE=arm-linux- menuconfig
+
+# If make gives error, some small changes to be made in Makefile
+
+(BusyBox Settings -> Build Options -> Static Executable)
+
+make ARCH=arm CROSS_COMPILE=arm-linux- install
+cd _install
+find . | cpio -o --format=newc > ../../rootfs.img
+
+////////////////////////////////////////////////////////////////
+
+Other Tools:
+yum install uboot-tools (mkimage)
+
+///////////////////////////////////////////////////////////////
+
+#Test the kernel:
+
+qemu-system-arm -M versatilepb -m 128M -serial stdio -kernel path/to/zImage -initrd path/to/rootfs.img -append "root=/dev/ram rdinit=/bin/sh"
+
+////////////////////////////////////////////////////////////////
+
+# References :
+
+	* Tuxdna's Github
+	* http://balau82.wordpress.com/2010/04/12/booting-linux-with-u-boot-on-qemu-arm/
+
+///////////////////////////////////////////////////////////////
+
+# List of Files : 
+
+# Kernel (VersatilePB) : zImage
+# Minimal RootFS : rootfs.img
+# Test RootFS : kerneltest/rootfs
+# Reference File : commands.txt
+# GNUnify 2011 Talk : gnunify-2011-talk.pdf
+
+//////////////////////////////////////////////////////////////
